@@ -32,61 +32,65 @@ actor TextToSpeechRecognizer  {
         case cancelled
     }
     
-    func speak(text: String, lang: LanguagesLocale) async {
-        // Configure audio session
+    private func setupAudio() {
         do {
             let audioSession = AVAudioSession.sharedInstance()
             try audioSession.setCategory(.playback, mode: .default, options: .mixWithOthers)
-            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-            // Cancel any existing speech
-            currentSpeechTask?.cancel()
-            
-            // Notify about speech start
-            
-            await onSpeechStateChange?(.started)
-            
-            
-            currentSpeechTask = Task {
-                let utterance = AVSpeechUtterance(string: text)
-                utterance.voice = AVSpeechSynthesisVoice(language: lang.rawValue)
-                // Configure additional utterance properties if needed
-                utterance.rate = AVSpeechUtteranceDefaultSpeechRate
-                utterance.volume = 1.0
-                
-                // Start speaking and wait until finished
-                if !synthesizer.isSpeaking {
-                    await withCheckedContinuation { continuation in
-                        synthesizer.speak(utterance)
-                        
-                        continuation.resume()
-                    }
-                }
-            }
-            // Wait for the speech task to complete or get canceled
-            
-            await currentSpeechTask?.value
-        } catch {
-            print("cannot read text with ",error.localizedDescription)
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation) }
+        catch {
+            print("Error setting up audio session: \(error)")
         }
     }
+    
+    func speak(text: String, lang: LanguagesLocale) async {
+        // Configure audio session
+        setupAudio()
+        // Cancel any existing speech
+        currentSpeechTask?.cancel()
+        
+        // Notify about speech start
+        
+        await onSpeechStateChange?(.started)
+        
+        
+        currentSpeechTask = Task {
+            let utterance = AVSpeechUtterance(string: text)
+            utterance.voice = AVSpeechSynthesisVoice(language: lang.rawValue)
+            // Configure additional utterance properties if needed
+            utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+            utterance.volume = 1.0
+            
+            // Start speaking and wait until finished
+            if !synthesizer.isSpeaking {
+                await withCheckedContinuation { continuation in
+                    synthesizer.speak(utterance)
+                    
+                    continuation.resume()
+                }
+            }
+        }
+        // Wait for the speech task to complete or get canceled
+        
+        await currentSpeechTask?.value
+    }
     func stopSpeaking() {
-           synthesizer.stopSpeaking(at: .immediate)
-           currentSpeechTask?.cancel()
-           
-           // Notify about speech cancellation
+        synthesizer.stopSpeaking(at: .immediate)
+        currentSpeechTask?.cancel()
+        
+        // Notify about speech cancellation
         Task { await onSpeechStateChange?(.cancelled) }
-       }
+    }
 }
 
 
 // Delegate class for handling AVSpeechSynthesizerDelegate
-final class SpeechSynthesizerDelegate: NSObject, AVSpeechSynthesizerDelegate {
+private final class SpeechSynthesizerDelegate: NSObject, AVSpeechSynthesizerDelegate {
     private let actor: TextToSpeechRecognizer
-
+    
     init(actor: TextToSpeechRecognizer) {
         self.actor = actor
     }
-
+    
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         // Call the actor method to handle the finished speech
         Task {

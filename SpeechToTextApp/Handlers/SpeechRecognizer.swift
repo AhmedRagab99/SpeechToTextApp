@@ -37,7 +37,7 @@ actor SpeechRecognizer {
     
     func requestMicrophoneAccess() async -> Bool {
         await withCheckedContinuation { continuation in
-            AVAudioSession.sharedInstance().requestRecordPermission { granted in
+            AVAudioApplication.requestRecordPermission { granted in
                 continuation.resume(returning: granted)
             }
         }
@@ -55,14 +55,10 @@ actor SpeechRecognizer {
         self.request = SFSpeechAudioBufferRecognitionRequest()
         
         // Configure audio session
-        let audioSession = AVAudioSession.sharedInstance()
-        try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
-        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        try await setupAudioSession()
         
-        let inputNode = audioEngine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
-            self?.request?.append(buffer)
+        if let request = request {
+            setupInputNode(using: request)
         }
         
         audioEngine.prepare()
@@ -78,6 +74,22 @@ actor SpeechRecognizer {
             if let error = error {
                 print("Recognition error: \(error.localizedDescription)")
             }
+        }
+    }
+    
+    private func setupAudioSession() async throws {
+        let audioSession = AVAudioSession.sharedInstance()
+        try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
+        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)        
+    }
+    
+    private func setupInputNode(using request: SFSpeechAudioBufferRecognitionRequest) {
+        
+        let inputNode = audioEngine.inputNode
+        inputNode.removeTap(onBus: 0)
+        let recordingFormat = inputNode.outputFormat(forBus: 0)
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) {  buffer, _ in
+            request.append(buffer)
         }
     }
     
