@@ -94,12 +94,13 @@ struct SpeechView: View {
                                 .foregroundColor(.blue)
                         }
                         .buttonStyle(BorderlessButtonStyle())
-                        .translationPresentation(isPresented: $showTranslation, text: selectedText)
+                        
                     }
                     
                 }
             }
             .listStyle(PlainListStyle())
+            .translationPresentation(isPresented: $showTranslation, text: selectedText)
             .onAppear {
                 viewModel.observeTranscription()
             }

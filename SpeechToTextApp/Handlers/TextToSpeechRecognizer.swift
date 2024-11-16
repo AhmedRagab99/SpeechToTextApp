@@ -33,33 +33,41 @@ actor TextToSpeechRecognizer  {
     }
     
     func speak(text: String, lang: LanguagesLocale) async {
-        // Cancel any existing speech
-        currentSpeechTask?.cancel()
-        
-        // Notify about speech start
-
-        await onSpeechStateChange?(.started)
-        
-        
-        currentSpeechTask = Task {
-            let utterance = AVSpeechUtterance(string: text)
-            utterance.voice = AVSpeechSynthesisVoice(language: lang.rawValue)
-            // Configure additional utterance properties if needed
-            utterance.rate = AVSpeechUtteranceDefaultSpeechRate
-            utterance.volume = 1.0
+        // Configure audio session
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .default, options: .mixWithOthers)
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+            // Cancel any existing speech
+            currentSpeechTask?.cancel()
             
-            // Start speaking and wait until finished            
-            if !synthesizer.isSpeaking {
-                await withCheckedContinuation { continuation in
-                    synthesizer.speak(utterance)
-                    
-                    continuation.resume()
+            // Notify about speech start
+            
+            await onSpeechStateChange?(.started)
+            
+            
+            currentSpeechTask = Task {
+                let utterance = AVSpeechUtterance(string: text)
+                utterance.voice = AVSpeechSynthesisVoice(language: lang.rawValue)
+                // Configure additional utterance properties if needed
+                utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+                utterance.volume = 1.0
+                
+                // Start speaking and wait until finished
+                if !synthesizer.isSpeaking {
+                    await withCheckedContinuation { continuation in
+                        synthesizer.speak(utterance)
+                        
+                        continuation.resume()
+                    }
                 }
             }
+            // Wait for the speech task to complete or get canceled
+            
+            await currentSpeechTask?.value
+        } catch {
+            print("cannot read text with ",error.localizedDescription)
         }
-        // Wait for the speech task to complete or get canceled
-
-        await currentSpeechTask?.value
     }
     func stopSpeaking() {
            synthesizer.stopSpeaking(at: .immediate)
